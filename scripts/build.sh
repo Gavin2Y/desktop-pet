@@ -132,6 +132,23 @@ if [ -f "$ROOT/Resources/AppIcon.icns" ]; then
     say "   图标：AppIcon.icns"
 fi
 
+# 猫咪照片。运行时用 Vision 从它抠出桌宠的形象。
+#
+# ⚠️ 同样必须在签名**之前**。铁律：所有拷贝完成 → codesign → 只读不动 → 打包。
+#
+# ⚠️ 刻意**不做** sips 预缩（CI 上有 sips，能把 2.4 MB 压到约 400 KB）：
+#    那会让构建依赖一个命令行工具的输出，多一个能坏的地方，而运行时
+#    CatCutout 已经会降采样，够了。少一个变量。
+#
+# 缺图直接 die —— 猫是这个 app 的全部意义。这和上面图标的"有就放、没有就跳过"
+# 不一样是有意的：图标是可选装饰，照片不是。
+if [ -f "$ROOT/Resources/cat.jpg" ]; then
+    cp "$ROOT/Resources/cat.jpg" "$APP/Contents/Resources/cat.jpg"
+    say "   图片：cat.jpg"
+else
+    die "Resources/cat.jpg 不存在（它是桌宠的脸）"
+fi
+
 say
 say "══ 4/5 签名 ══"
 # ad-hoc 签名（identity 就是那个 `-`）。
