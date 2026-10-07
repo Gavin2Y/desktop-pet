@@ -61,7 +61,12 @@ for arch in $ARCHS; do
 done
 
 say
-say "══ 2/5 编译（架构：$ARCHS）══"
+# ⚠️⚠️ **`${ARCHS}` 的花括号不能省。** 这里踩过一次真实的坑（CI run #1 就挂在这行）：
+#    `$ARCHS` 后面紧跟全角括号 `）`，bash 会把那个多字节字符的**头一个字节**当成
+#    变量名的一部分，于是去找一个叫 `ARCHS\xef` 的变量，在 `set -u` 下直接报
+#    `ARCHS�: unbound variable`。**报错里那个乱码字符就是线索。**
+#    规矩：凡是 `$变量` 后面紧跟中文标点（）、：，「」 的地方，一律写 `${变量}`。
+say "══ 2/5 编译（架构：${ARCHS}）══"
 swift build "${BUILD_ARGS[@]}"
 
 # ⚠️⚠️ **绝不硬编码产物路径。**
@@ -80,7 +85,7 @@ BIN_DIR="$(swift build "${QUERY_ARGS[@]}" --show-bin-path | tail -n 1)"
 BIN="$BIN_DIR/$APP_NAME"
 
 if [ ! -f "$BIN" ]; then
-    say "   ⚠️ --show-bin-path 给的路径不存在（$BIN），在 .build 里搜一遍"
+    say "   ⚠️ --show-bin-path 给的路径不存在（${BIN}），在 .build 里搜一遍"
     BIN="$(find "$ROOT/.build" -type f -name "$APP_NAME" -perm -u+x -print \
         | sort | head -n 1 || true)"
 fi
