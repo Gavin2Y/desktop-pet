@@ -209,9 +209,14 @@ enum CatCutout {
     ///    就绪）会被**永久固化**下来 —— 用户会永远看到降级卡片，而且
     ///    "重启也没用"，因为缓存文件一直在。
     private static func writeCache(_ image: CGImage) {
+        // ⚠️ `NSBitmapImageRep(cgImage:)` 是**非可失败**初始化器（`init(cgImage:)`，
+        //    返回 `NSBitmapImageRep` 而不是 `NSBitmapImageRep?`），所以它不能写在
+        //    `guard let` 的绑定位置上 —— 那样 CI 报
+        //    "initializer for conditional binding must have Optional type"。
+        //    只有 `representation(using:properties:)` 是可失败的。
         guard let url = cacheURL,
-              let rep = NSBitmapImageRep(cgImage: image),
-              let png = rep.representation(using: .png, properties: [:]) else {
+              let png = NSBitmapImageRep(cgImage: image)
+                  .representation(using: .png, properties: [:]) else {
             return
         }
         // 写不进去也无所谓（只读磁盘、沙箱限制……），下次启动再算一遍而已。
