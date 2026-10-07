@@ -1,0 +1,26 @@
+# 绝不入库的凭据类文件。
+# 这是整个 ~/workspaces 的统一规矩，范本是
+# home-server-services/.gitignore —— 那边的 scripts/pre-push 还会再查一遍。
+*.key
+*.pem
+*-secret.yaml
+kubeconfig
+.kube/
+
+# macOS
+.DS_Store
+
+# Swift / SPM 构建产物
+.build/
+.swiftpm/
+dist/
+
+# Xcode。本项目刻意不用 .xcodeproj（见 README），但万一有人用 Xcode 打开
+# 这个 SPM 包，它会往里塞这些用户态文件。
+xcuserdata/
+*.xcuserstate
+
+# ⚠️ Package.resolved **不忽略**。
+#    本仓库零第三方依赖，正常情况下它根本不会出现；真出现了说明引入了依赖，
+#    那时候它就应该提交（和 home-server-services 里 .terraform.lock.hcl
+#    "必须提交"的立场一致 —— 锁文件是拿来复现的，不是拿来忽略的）。

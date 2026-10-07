@@ -1,0 +1,105 @@
+name: Build DesktopPet
+
+# 手工触发（调试用）+ 推 v* tag 时构建并发布。
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+# ⚠️ **必需。** GITHUB_TOKEN 从 2023 年起默认只读，缺了这一段，最后上传
+#    Release asset 那一步会报 `Resource not accessible by integration`。
+#
+# ⚠️ 还有一个更隐蔽的：**job 级的 permissions 覆盖不了仓库级**的
+#    "Workflow permissions: read-only" 设置。如果构建全过、只在 release
+#    那一步失败，去仓库 Settings → Actions → General 检查一下，
+#    而且改完必须**重跑一个新的 run**（rerun 会复用旧的 token 上下文）。
+permissions:
+  contents: write
+
+jobs:
+  build:
+    # ⚠️ 显式钉 macos-15，**不要用 macos-latest**。
+    #    latest 已经从这个镜像滚到 macos-26 了，会在你不知情的时候换工具链，
+    #    某天 CI 突然变红而代码一个字没动。
+    #
+    # ⚠️ 也**不要**碰 macos-15-large / -xlarge：larger runner 即使在公开仓库上
+    #    也是要计费的。标准的 macos-15 在公开仓库上完全免费、不扣额度。
+    runs-on: macos-15
+
+    steps:
+      - name: Checkout
+        # ⚠️ 不要写 @v4。GitHub 在 2026-06 把 hosted runner 切到了 Node 24，
+        #    Node 20 已经移除，跑在 node20 上的 action 会直接失败。
+        #    v5 是最小的 node24-native major。
+        uses: actions/checkout@v5
+
+      - name: 工具链版本
+        # 单独一步把版本打进日志：CI 出问题时，答案通常就在这几行里，
+        # 省得再去猜 runner 上到底是哪个 Xcode / Swift。
+        run: |
+          sw_vers
+          echo "---"
+          xcodebuild -version
+          echo "---"
+          swift --version
+          echo "---"
+          uname -m
+
+      - name: 构建并打包
+        env:
+          # 想退回单架构就在这一行改成 "arm64"。其余不用动。
+          ARCHS: "arm64 x86_64"
+        run: |
+          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+            export VERSION="${GITHUB_REF_NAME#v}"
+          else
+            # 手工触发时没有 tag，用一个明显不是正式版本号的版本。
+            export VERSION="0.0.0"
+          fi
+          export BUILD_NUMBER="${GITHUB_RUN_NUMBER}"
+          echo "版本 ${VERSION}（build ${BUILD_NUMBER}）"
+          bash scripts/build.sh
+
+      - name: 校验产物
+        run: |
+          set -euo pipefail
+          lipo -archs dist/DesktopPet.app/Contents/MacOS/DesktopPet
+          codesign --verify --strict --verbose=2 dist/DesktopPet.app
+          echo "--- zip 内容（头几行）"
+          unzip -Z1 dist/*.zip | head -n 5
+
+      - name: 上传调试用的 artifact
+        # ⚠️⚠️ **这个 artifact 不是交付物。**
+        #
+        #    upload-artifact 会丢掉文件权限（所有文件设成 644），
+        #    Contents/MacOS/DesktopPet 的可执行位就没了 —— 用户从 artifact
+        #    下载解压后应用打不开。
+        #
+        #    **真正的交付物是下面的 Release asset**：action-gh-release 上传的是
+        #    工作区里那个 ditto 出来的原始 zip，字节级不动。
+        #    这一步只为了在 Actions 页面上留个能点的下载，方便调试。
+        #    不要用 `@v4`：理由同 checkout。
+        uses: actions/upload-artifact@v7
+        with:
+          name: DesktopPet-zip
+          path: dist/*
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: 挂到 GitHub Release
+        if: github.ref_type == 'tag'
+        uses: softprops/action-gh-release@v3
+        with:
+          files: |
+            dist/*.zip
+            dist/*.sha256
+          generate_release_notes: true
+          fail_on_unmatched_files: true
+          # 挂上去的 asset URL 形如：
+          #   https://github.com/<owner>/desktop-pet/releases/download/v0.0.1/DesktopPet-0.0.1.zip
+          #
+          # ⚠️ 这条 URL 是**留给下游 n8n 的接口**：公开仓库的 Release asset
+          #    可以直接 GET，**不需要任何 token**。将来 n8n 就是从这里拉产物、
+          #    解包、放进 /srv/delivery/desktop-pet/<版本>/。
+          #    （Actions 的 artifact 接口要鉴权、而且会过期，所以不用它。）

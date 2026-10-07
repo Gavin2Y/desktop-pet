@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  app bundle 的元数据。scripts/build.sh 会把它拷进
+  DesktopPet.app/Contents/Info.plist，然后用 PlistBuddy 覆盖版本号。
+
+  ⚠️ 这个文件**不在任何 SPM target 的 path 下**，所以 SwiftPM 不会把它
+     当资源处理 —— 这是故意的，它由 build.sh 手工摆放。
+-->
+<plist version="1.0">
+<dict>
+    <key>CFBundleDevelopmentRegion</key>
+    <string>en</string>
+
+    <!-- ⚠️ 必须和 Contents/MacOS/ 里的文件名**逐字节相同**，否则应用
+         启动不了（症状是双击没反应、或者一闪就退出）。 -->
+    <key>CFBundleExecutable</key>
+    <string>DesktopPet</string>
+
+    <key>CFBundleIdentifier</key>
+    <string>top.gavin-nas.desktoppet</string>
+
+    <key>CFBundleInfoDictionaryVersion</key>
+    <string>6.0</string>
+
+    <key>CFBundleName</key>
+    <string>DesktopPet</string>
+
+    <!-- APPL = 这是个应用（不是框架/包）。必需。 -->
+    <key>CFBundlePackageType</key>
+    <string>APPL</string>
+
+    <!-- 下面两个由 scripts/build.sh 用 PlistBuddy 覆盖成真实版本号。
+         它们必须**先存在于模板里**，PlistBuddy 的 Set 才能生效。 -->
+    <key>CFBundleShortVersionString</key>
+    <string>0.0.1</string>
+    <key>CFBundleVersion</key>
+    <string>1</string>
+
+    <!-- ⚠️ 必须和 Package.swift 的 .macOS(.v13) 对应。 -->
+    <key>LSMinimumSystemVersion</key>
+    <string>13.0</string>
+
+    <!-- ⚠️ **不显示 Dock 图标就靠这一个 key，别再去调
+         NSApplication.setActivationPolicy(.accessory)。**
+
+         两者在效果上等价（accessory 策略 == LSUIElement），但：
+           - LSUIElement 是静态 key，启动时就生效，没有中间态；
+           - setActivationPolicy 是运行时 API，有「图标先闪几毫秒才消失」
+             的已知问题；
+           - 两个一起用还会让 Sonoma+ 的 ControlCenter 把菜单栏图标
+             扔进「被屏蔽的菜单栏项」列表里。
+
+         我们的需求是「永远不显示」，不需要运行时切换，所以只用这个。 -->
+    <key>LSUIElement</key>
+    <true/>
+
+    <!-- Retina。不加的话窗口内容会糊。 -->
+    <key>NSHighResolutionCapable</key>
+    <true/>
+
+    <!-- 手工组 bundle 时建议显式写上，确保 AppKit 正确初始化。 -->
+    <key>NSPrincipalClass</key>
+    <string>NSApplication</string>
+
+    <!-- 有图标之后取消注释，并把 AppIcon.icns 放进 Contents/Resources/。
+         注意：图标必须在**签名之前**放好，签名后任何改动都会让签名失效。 -->
+    <!--
+    <key>CFBundleIconFile</key>
+    <string>AppIcon</string>
+    -->
+</dict>
+</plist>
