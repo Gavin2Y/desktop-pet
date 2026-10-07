@@ -28,6 +28,19 @@ final class PetWindow: NSWindow {
     private var grabOffsetInWindow: NSPoint?
     private var windowOriginAtGrab: NSPoint?
 
+    /// 这块矩形（**窗口坐标**）里的左键按下**不**触发拖拽，事件会继续往下传给
+    /// 子视图。
+    ///
+    /// 存在的理由：下面的 `sendEvent(_:)` 会吞掉所有左键事件来实现拖拽，于是
+    /// 同一个窗口里的 `NSButton` **永远收不到点击**。让控件所占的那块区域豁免即可。
+    ///
+    /// ⚠️ 默认 `.zero`。`NSRect.zero.isEmpty == true`，所以下面那个判断自动变成
+    ///    "没有排除区"，行为**完全退回加这个属性之前** —— 也就是说单独加上这个
+    ///    属性是零风险的，可以独立验证。
+    ///
+    /// 由 `PetView.syncDragExclusionRect()` 负责写入（它知道控件实际占了哪一块）。
+    var dragExclusionRect: NSRect = .zero
+
     /// 一次性把窗口的外观属性摆好。由 AppDelegate 在创建后立刻调用。
     func applyPetAppearance() {
         // 透明三件套。缺任何一个，窗口就是个灰底方块。
@@ -70,7 +83,26 @@ final class PetWindow: NSWindow {
     override func sendEvent(_ event: NSEvent) {
         switch event.type {
         case .leftMouseDown:
-            grabOffsetInWindow = event.locationInWindow
+            let point = event.locationInWindow
+
+            // ⚠️ 坐标系：`event.locationInWindow` 是**窗口坐标**，所以
+            //    `dragExclusionRect` 也必须是窗口坐标。borderless 窗口里
+            //    contentView.frame 恰好等于 (0, 0, w, h)，视图坐标和窗口坐标
+            //    数值相同 —— 但**别依赖这个巧合**，PetView 那边用
+            //    `convert(_:to: nil)` 显式换算过来。
+            if !dragExclusionRect.isEmpty && dragExclusionRect.contains(point) {
+                // 显式清空，防止上一次拖拽的残留值让下面的 dragged 分支误触发。
+                grabOffsetInWindow = nil
+                windowOriginAtGrab = nil
+
+                // ⚠️⚠️ **必须是 break，不能是 return。**
+                //    break 跳出 switch 后会落到末尾的 super.sendEvent(event)，
+                //    事件才到得了按钮。写成 return 的话事件在这里就没了，
+                //    症状是"按钮完全没反应" —— 看起来像按钮本身的问题，极难查。
+                break
+            }
+
+            grabOffsetInWindow = point
             windowOriginAtGrab = frame.origin
 
         case .leftMouseDragged:
